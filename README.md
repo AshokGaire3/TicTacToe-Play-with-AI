@@ -390,8 +390,32 @@ python3 database/view_data.py --stats
 
 **Using the API:**
 ```bash
+# Get game history (JSON response)
 curl http://localhost:5001/get_game_history?limit=10
+
+# Export as CSV
+curl http://localhost:5001/export_game_history?format=csv -o game_history.csv
+
+# Export as JSON
+curl http://localhost:5001/export_game_history?format=json -o game_history.json
 ```
+
+**Saving Game History to File:**
+```bash
+# Using the save script (no extra dependencies required)
+python database/save_game_history.py --format json --limit 10
+python database/save_game_history.py --format csv --limit 50
+python database/save_game_history.py --format json --output my_history.json --limit 100
+
+# Or using curl to save directly
+curl http://localhost:5001/get_game_history?limit=10 > game_history.json
+curl http://localhost:5001/export_game_history?format=csv -o game_history.csv
+```
+
+**Using the Web UI:**
+1. Click "View Game History" button in the game
+2. Click "Export as JSON" or "Export as CSV" buttons
+3. The file will be downloaded automatically
 
 **Direct database access:**
 The database file is located at `database/tictactoe.db`. You can use any SQLite client:

@@ -74,6 +74,11 @@ Retrieve game history (optional).
 - Query params: `limit` (default: 10)
 - Response: `{games: [...], count: N}`
 
+### `/export_game_history` (GET)
+Export game history as CSV or JSON.
+- Query params: `format` ('csv' or 'json'), `limit` (optional)
+- Response: CSV file download or JSON data
+
 ## Viewing Logged Data
 
 ### Using the View Script
@@ -96,8 +101,35 @@ python database/view_data.py --stats
 You can also query game history via the API:
 
 ```bash
+# Get game history (JSON)
 curl http://localhost:5001/get_game_history?limit=10
+
+# Export as CSV
+curl http://localhost:5001/export_game_history?format=csv -o game_history.csv
+
+# Export as JSON
+curl http://localhost:5001/export_game_history?format=json -o game_history.json
 ```
+
+### Saving Game History to File
+
+A Python script is provided to save game history data to files:
+
+```bash
+# Save last 10 games as JSON
+python database/save_game_history.py --format json --limit 10
+
+# Save last 50 games as CSV
+python database/save_game_history.py --format csv --limit 50
+
+# Save to a specific file
+python database/save_game_history.py --format json --output my_history.json --limit 100
+
+# Save all games (use high limit or 0 for CSV)
+python database/save_game_history.py --format csv --limit 0
+```
+
+**Note:** The save script uses Python's built-in `urllib`, so no extra dependencies are required beyond what's already installed.
 
 ### Direct Database Access
 
