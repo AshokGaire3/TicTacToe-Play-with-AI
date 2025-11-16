@@ -1,7 +1,10 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 import logging
 import os
 import sys
+from datetime import datetime
+import csv
+import io
 
 # Add backend directory to path for imports
 backend_dir = os.path.dirname(os.path.abspath(__file__))
@@ -329,6 +332,113 @@ def get_game_history():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/export_game_history', methods=['GET'])
+def export_game_history():
+    """Export all game history as CSV for model training"""
+    try:
+        format_type = request.args.get('format', 'csv').lower()
+        limit = request.args.get('limit', None, type=int)
+        
+        db = get_db_session()
+        try:
+            query = db.query(Game).order_by(Game.created_at.desc())
+            if limit:
+                query = query.limit(limit)
+            games = query.all()
+            
+            if format_type == 'csv':
+                # Generate CSV
+                output = io.StringIO()
+                writer = csv.writer(output)
+                
+                # Write header
+                writer.writerow([
+                    'game_id', 'player_symbol', 'ai_symbol', 'difficulty', 
+                    'result', 'winner', 'created_at', 'move_number', 
+                    'row', 'col', 'player', 'is_ai_move'
+                ])
+                
+                # Write data
+                for game in games:
+                    moves = db.query(Move).filter(Move.game_id == game.id).order_by(Move.move_number).all()
+                    if moves:
+                        for move in moves:
+                            writer.writerow([
+                                game.id,
+                                game.player_symbol,
+                                game.ai_symbol,
+                                game.difficulty,
+                                game.result,
+                                game.winner or '',
+                                game.created_at.isoformat() if game.created_at else '',
+                                move.move_number,
+                                move.row,
+                                move.col,
+                                move.player,
+                                1 if move.is_ai_move else 0
+                            ])
+                    else:
+                        # Game with no moves
+                        writer.writerow([
+                            game.id,
+                            game.player_symbol,
+                            game.ai_symbol,
+                            game.difficulty,
+                            game.result,
+                            game.winner or '',
+                            game.created_at.isoformat() if game.created_at else '',
+                            '', '', '', '', ''
+                        ])
+                
+                output.seek(0)
+                filename = f'tictactoe_history_{datetime.now().strftime("%Y%m%d")}.csv'
+                return Response(
+                    output.getvalue(),
+                    mimetype='text/csv',
+                    headers={
+                        'Content-Disposition': f'attachment; filename={filename}'
+                    }
+                )
+            else:
+                # Return JSON
+                result = []
+                for game in games:
+                    moves = db.query(Move).filter(Move.game_id == game.id).order_by(Move.move_number).all()
+                    result.append({
+                        'game_id': game.id,
+                        'player_symbol': game.player_symbol,
+                        'ai_symbol': game.ai_symbol,
+                        'difficulty': game.difficulty,
+                        'result': game.result,
+                        'winner': game.winner,
+                        'created_at': game.created_at.isoformat() if game.created_at else None,
+                        'moves': [
+                            {
+                                'move_number': move.move_number,
+                                'row': move.row,
+                                'col': move.col,
+                                'player': move.player,
+                                'is_ai_move': bool(move.is_ai_move)
+                            }
+                            for move in moves
+                        ]
+                    })
+                
+                return jsonify({
+                    'games': result,
+                    'count': len(result),
+                    'exported_at': datetime.utcnow().isoformat()
+                })
+                
+        finally:
+            db.close()
+            
+    except Exception as e:
+        print(f"ERROR in export_game_history: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/debug/ai')
 def debug_ai():
     """Debug endpoint to test AI directly"""
@@ -348,6 +458,5 @@ def debug_ai():
 if __name__ == '__main__':
     # Get port from environment variable or default to 5001
     port = int(os.environ.get('PORT', 5001))
-    # Only enable debug in development
-    debug = os.environ.get('FLASK_ENV') == 'development'
-    app.run(debug=debug, host='0.0.0.0', port=port)
+    # Enable debug mode for auto-reload of templates and static files
+    app.run(debug=True, host='0.0.0.0', port=port)
