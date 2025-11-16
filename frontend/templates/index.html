@@ -8,14 +8,15 @@
 </head>
 <body>
     <div class="container">
-        <h1>Tic-Tac-Toe vs AI</h1>
+        <h1>Tic-Tac-Toe</h1>
+        <h2>You vs AI</h2>
         <div class="game-info">
             <p>You are: <span id="human-player">X</span></p>
             <p>AI is: <span id="ai-player">O</span></p>
         </div>
         
         <div class="difficulty-selector">
-            <label for="difficulty">AI Difficulty:</label>
+            <label for="difficulty">AI Difficulty Level:</label>
             <select id="difficulty" name="difficulty">
                 <option value="easy">Easy</option>
                 <option value="medium">Medium</option>
@@ -42,11 +43,49 @@
         </div>
         
         <div class="controls">
-            <button id="reset-btn">New Game</button>
-            <button id="switch-sides">Switch Sides</button>
+            <button id="reset-btn">
+                <span class="button-icon">🔄</span>
+                <span class="button-text">New Game</span>
+            </button>
+            <button id="switch-sides">
+                <span class="button-icon">⇄</span>
+                <span class="button-text">Switch Sides</span>
+            </button>
+            <button id="view-history-btn">
+                <span class="button-icon">📊</span>
+                <span class="button-text">View History</span>
+            </button>
         </div>
         
         <div id="message"></div>
+    </div>
+    
+    <!-- Game History Modal -->
+    <div id="history-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Game History</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="history-controls">
+                    <button id="export-json-btn">Export as JSON</button>
+                    <button id="export-csv-btn">Export as CSV</button>
+                    <button id="refresh-history-btn">Refresh</button>
+                    <label for="history-limit">Show:</label>
+                    <select id="history-limit">
+                        <option value="10">Last 10 games</option>
+                        <option value="25">Last 25 games</option>
+                        <option value="50">Last 50 games</option>
+                        <option value="100">Last 100 games</option>
+                    </select>
+                </div>
+                <div id="history-stats" class="history-stats"></div>
+                <div id="history-list" class="history-list"></div>
+                <div id="history-loading" class="loading">Loading game history...</div>
+                <div id="history-error" class="error"></div>
+            </div>
+        </div>
     </div>
     
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>

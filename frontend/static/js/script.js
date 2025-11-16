@@ -22,6 +22,7 @@ class TicTacToeGame {
     initializeEventListeners() {
         document.getElementById('reset-btn').addEventListener('click', () => this.resetGame());
         document.getElementById('switch-sides').addEventListener('click', () => this.switchSides());
+        document.getElementById('view-history-btn').addEventListener('click', () => this.showGameHistory());
         document.getElementById('difficulty').addEventListener('change', (e) => {
             this.difficulty = e.target.value;
             this.showMessage(`Difficulty set to: ${e.target.value.toUpperCase()}`);
@@ -34,6 +35,37 @@ class TicTacToeGame {
         document.querySelectorAll('.cell').forEach(cell => {
             cell.addEventListener('click', (e) => this.handleCellClick(e));
         });
+        
+        // History modal event listeners
+        const modal = document.getElementById('history-modal');
+        const closeBtn = document.querySelector('.close');
+        const refreshBtn = document.getElementById('refresh-history-btn');
+        const exportJsonBtn = document.getElementById('export-json-btn');
+        const exportCsvBtn = document.getElementById('export-csv-btn');
+        const historyLimit = document.getElementById('history-limit');
+        
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeHistoryModal());
+        }
+        if (modal) {
+            window.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    this.closeHistoryModal();
+                }
+            });
+        }
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => this.loadGameHistory());
+        }
+        if (exportJsonBtn) {
+            exportJsonBtn.addEventListener('click', () => this.exportHistory('json'));
+        }
+        if (exportCsvBtn) {
+            exportCsvBtn.addEventListener('click', () => this.exportHistory('csv'));
+        }
+        if (historyLimit) {
+            historyLimit.addEventListener('change', () => this.loadGameHistory());
+        }
     }
 
     async handleCellClick(event) {
@@ -359,6 +391,283 @@ class TicTacToeGame {
         } catch (error) {
             console.error('Error logging game end:', error);
         }
+    }
+
+    async showGameHistory() {
+        /* Show game history modal */
+        const modal = document.getElementById('history-modal');
+        modal.style.display = 'block';
+        await this.loadGameHistory();
+    }
+
+    closeHistoryModal() {
+        /* Close game history modal */
+        const modal = document.getElementById('history-modal');
+        modal.style.display = 'none';
+    }
+
+    async loadGameHistory() {
+        /* Load and display game history */
+        const historyList = document.getElementById('history-list');
+        const historyLoading = document.getElementById('history-loading');
+        const historyError = document.getElementById('history-error');
+        const historyStats = document.getElementById('history-stats');
+        const limit = document.getElementById('history-limit').value;
+
+        historyLoading.style.display = 'block';
+        historyError.textContent = '';
+        historyList.innerHTML = '';
+        historyStats.innerHTML = '';
+
+        try {
+            const response = await fetch(`/get_game_history?limit=${limit}`);
+            
+            if (!response.ok) {
+                throw new Error(`Failed to load history: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const games = data.games || [];
+
+            // Display statistics
+            this.displayHistoryStats(games, historyStats);
+
+            // Display game list
+            if (games.length === 0) {
+                historyList.innerHTML = '<p class="no-games">No games found. Start playing to see your history!</p>';
+            } else {
+                games.forEach(game => {
+                    const gameElement = this.createGameHistoryElement(game);
+                    historyList.appendChild(gameElement);
+                });
+            }
+
+            // Store games for export
+            this.gameHistoryData = games;
+
+        } catch (error) {
+            console.error('Error loading game history:', error);
+            historyError.textContent = `Error: ${error.message}`;
+        } finally {
+            historyLoading.style.display = 'none';
+        }
+    }
+
+    displayHistoryStats(games, statsElement) {
+        /* Display game statistics */
+        if (games.length === 0) {
+            statsElement.innerHTML = '<p>No games to display statistics.</p>';
+            return;
+        }
+
+        const totalGames = games.length;
+        const wins = games.filter(g => g.result === 'win').length;
+        const losses = games.filter(g => g.result === 'loss').length;
+        const ties = games.filter(g => g.result === 'tie').length;
+        const winRate = totalGames > 0 ? ((wins / totalGames) * 100).toFixed(1) : 0;
+
+        const difficultyStats = {};
+        games.forEach(game => {
+            const diff = game.difficulty || 'unknown';
+            if (!difficultyStats[diff]) {
+                difficultyStats[diff] = { total: 0, wins: 0, losses: 0, ties: 0 };
+            }
+            difficultyStats[diff].total++;
+            if (game.result === 'win') difficultyStats[diff].wins++;
+            else if (game.result === 'loss') difficultyStats[diff].losses++;
+            else if (game.result === 'tie') difficultyStats[diff].ties++;
+        });
+
+        let statsHTML = `
+            <div class="stats-summary">
+                <h3>Statistics</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Total Games:</span>
+                        <span class="stat-value">${totalGames}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Wins:</span>
+                        <span class="stat-value win">${wins}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Losses:</span>
+                        <span class="stat-value loss">${losses}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Ties:</span>
+                        <span class="stat-value tie">${ties}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Win Rate:</span>
+                        <span class="stat-value">${winRate}%</span>
+                    </div>
+                </div>
+        `;
+
+        if (Object.keys(difficultyStats).length > 0) {
+            statsHTML += '<h4>By Difficulty:</h4><div class="stats-grid">';
+            Object.entries(difficultyStats).forEach(([diff, stats]) => {
+                const diffWinRate = stats.total > 0 ? ((stats.wins / stats.total) * 100).toFixed(1) : 0;
+                statsHTML += `
+                    <div class="stat-item difficulty-stat">
+                        <span class="stat-label">${diff.toUpperCase()}:</span>
+                        <span class="stat-value">${stats.total} games (${stats.wins}W/${stats.losses}L/${stats.ties}T, ${diffWinRate}% win)</span>
+                    </div>
+                `;
+            });
+            statsHTML += '</div>';
+        }
+
+        statsHTML += '</div>';
+        statsElement.innerHTML = statsHTML;
+    }
+
+    createGameHistoryElement(game) {
+        /* Create HTML element for a single game in history */
+        const gameDiv = document.createElement('div');
+        gameDiv.className = 'game-history-item';
+        
+        const date = new Date(game.created_at);
+        const dateStr = date.toLocaleString();
+        const resultClass = game.result === 'win' ? 'win' : game.result === 'loss' ? 'loss' : 'tie';
+        const resultText = game.result === 'win' ? 'Win' : game.result === 'loss' ? 'Loss' : 'Tie';
+        const winnerText = game.winner ? ` (Winner: ${game.winner})` : ' (Tie)';
+        
+        gameDiv.innerHTML = `
+            <div class="game-header">
+                <span class="game-id">Game #${game.game_id}</span>
+                <span class="game-date">${dateStr}</span>
+                <span class="game-result ${resultClass}">${resultText}${winnerText}</span>
+            </div>
+            <div class="game-details">
+                <span class="game-detail">Player: ${game.player_symbol}</span>
+                <span class="game-detail">AI: ${game.ai_symbol}</span>
+                <span class="game-detail">Difficulty: ${game.difficulty}</span>
+                <span class="game-detail">Moves: ${game.moves.length}</span>
+            </div>
+            <div class="game-moves">
+                ${game.moves.map((move, idx) => `
+                    <span class="move-item ${move.is_ai_move ? 'ai-move' : 'player-move'}">
+                        ${move.move_number}. ${move.player}@(${move.row},${move.col})
+                    </span>
+                `).join(' ')}
+            </div>
+        `;
+        
+        return gameDiv;
+    }
+
+    async exportHistory(format) {
+        /* Export game history as JSON or CSV */
+        if (!this.gameHistoryData || this.gameHistoryData.length === 0) {
+            alert('No game history data to export. Please load history first.');
+            return;
+        }
+
+        try {
+            if (format === 'json') {
+                this.exportAsJSON(this.gameHistoryData);
+            } else if (format === 'csv') {
+                await this.exportAsCSV(this.gameHistoryData);
+            }
+        } catch (error) {
+            console.error('Error exporting history:', error);
+            alert(`Error exporting history: ${error.message}`);
+        }
+    }
+
+    exportAsJSON(data) {
+        /* Export game history as JSON file */
+        const jsonStr = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `tictactoe_history_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    async exportAsCSV(data) {
+        /* Export game history as CSV file */
+        try {
+            // Fetch all game data for CSV export
+            const response = await fetch('/export_game_history?format=csv');
+            if (!response.ok) {
+                throw new Error('Failed to export CSV');
+            }
+            
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `tictactoe_history_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            // Fallback: generate CSV from current data
+            const csv = this.generateCSV(data);
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `tictactoe_history_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    }
+
+    generateCSV(data) {
+        /* Generate CSV from game history data */
+        const headers = ['game_id', 'player_symbol', 'ai_symbol', 'difficulty', 'result', 'winner', 'created_at', 'move_number', 'row', 'col', 'player', 'is_ai_move'];
+        const rows = [];
+
+        data.forEach(game => {
+            if (game.moves && game.moves.length > 0) {
+                game.moves.forEach(move => {
+                    rows.push([
+                        game.game_id,
+                        game.player_symbol,
+                        game.ai_symbol,
+                        game.difficulty,
+                        game.result,
+                        game.winner || '',
+                        game.created_at,
+                        move.move_number,
+                        move.row,
+                        move.col,
+                        move.player,
+                        move.is_ai_move ? '1' : '0'
+                    ]);
+                });
+            } else {
+                // Game with no moves
+                rows.push([
+                    game.game_id,
+                    game.player_symbol,
+                    game.ai_symbol,
+                    game.difficulty,
+                    game.result,
+                    game.winner || '',
+                    game.created_at,
+                    '', '', '', '', ''
+                ]);
+            }
+        });
+
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+
+        return csvContent;
     }
 }
 
